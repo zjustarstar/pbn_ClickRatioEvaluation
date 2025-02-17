@@ -3,39 +3,32 @@ import numpy as np
 import open_clip
 import torch
 import torch.optim as optim
+import yaml
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 from model import ResNetBERTModel
 from data_preprocessing import load_data as load_data
-from data_preprocessing1 import load_data as load_data1
-from data_preprocessing2 import load_data as load_data2
 
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import resnet50, ResNet50_Weights
 from torchvision import transforms
 
+
 # --------------------------
-# Configuration Parameters
+# Load Configuration
 # --------------------------
-config = {
-    'train_csv': 'D:/Codes/LineArtPred/data/csv/balanced_data4/train_dataset_balanced.csv',
-    'val_csv': 'D:/Codes/LineArtPred/data/csv/balanced_data4/val_dataset.csv',
-    'test_csv': 'D:/Codes/LineArtPred/data/csv/balanced_data4/test_dataset.csv',
-    'image_dir': 'D:/Codes/JigsawPrediction/data/images',
-    'batch_size': 32,
-    'learning_rate': 5e-5,
-    'num_epochs': 100,
-    'patience': 3,
-    'checkpoint_dir': 'models/coca_vit_b_32/checkpoints5/',
-    'use_gpu': torch.cuda.is_available(),
-    'num_classes': 4,
-    'use_features': {
-        'use_full_image': True,
-        'use_numeric_features': True,
-        'use_text_hierarchy': True
-    }
-}
+def load_config(config_path='./config/config_train.yaml'):
+    with open(config_path, 'r', encoding='utf-8') as file:
+        config = yaml.safe_load(file)
+
+    # 确保数值参数是正确的类型
+    config['learning_rate'] = float(config['learning_rate'])
+
+    return config
+
+
+config = load_config()
 
 # --------------------------
 # Model Initialization
@@ -51,7 +44,7 @@ image_preprocess = transforms.Compose([
 ])
 
 # Load data
-data_loaders = load_data2(
+data_loaders = load_data(
     config['train_csv'], config['val_csv'], config['test_csv'],
     config['image_dir'], image_preprocess, open_clip.tokenize, config['batch_size'],
     config['use_features']
@@ -64,22 +57,6 @@ model_wrapper = model_wrapper.to(device)
 # --------------------------
 # Loss and Optimizer
 # --------------------------
-class CBLoss(nn.Module):
-    """Class-Balanced Loss to handle class imbalance."""
-    def __init__(self, beta, num_classes):
-        super(CBLoss, self).__init__()
-        self.beta = beta
-        self.num_classes = num_classes
-
-    def forward(self, logits, targets):
-        effective_num = 1.0 - torch.pow(self.beta, targets.bincount(minlength=self.num_classes))
-        weights = (1.0 - self.beta) / (effective_num + 1e-8)
-        weights = weights / weights.sum() * self.num_classes
-        weights = weights.to(logits.device)
-
-        return F.cross_entropy(logits, targets, weight=weights)
-
-# criterion = CBLoss(beta=0.99, num_classes=config['num_classes'])
 class FocalLoss(nn.Module):
     def __init__(self, alpha=0.25, gamma=2.0):
         super(FocalLoss, self).__init__()
@@ -177,9 +154,9 @@ def early_stopping_criteria(val_loss, best_val_loss, patience_counter, patience_
 
     return stop_training, patience_counter, update_best_model, best_val_loss
 
-def save_best_model(model, epoch, checkpoint_dir):
-    """Saves the best model during training."""
-    best_model_path = os.path.join(checkpoint_dir, f"best_model_epoch_{epoch + 1}.pth")
+def save_best_model(model, epoch, checkpoint_dir, num_classes):
+    """Saves the best model during training with num_classes info in filename."""
+    best_model_path = os.path.join(checkpoint_dir, f"best_model_epoch_{epoch + 1}_num_classes_{num_classes}.pth")
     torch.save(model.state_dict(), best_model_path)
     print(f"Best model saved at {best_model_path}")
 
@@ -205,7 +182,7 @@ for epoch in range(config['num_epochs']):
     )
 
     if update_best_model:
-        save_best_model(model_wrapper, epoch, config['checkpoint_dir'])
+        save_best_model(model_wrapper, epoch, config['checkpoint_dir'], config['num_classes'])
 
     # Save the last model after every epoch
     torch.save(model_wrapper.state_dict(), last_model_path)

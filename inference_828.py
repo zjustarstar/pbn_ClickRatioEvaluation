@@ -2,6 +2,8 @@ import os
 import numpy as np
 import open_clip
 import torch
+import yaml
+
 from model import ResNetBERTModel
 from inference_data_preprocessing import load_inference_data
 from torchvision import transforms
@@ -9,27 +11,13 @@ from sklearn.metrics import accuracy_score, confusion_matrix, classification_rep
 import pandas as pd
 
 # --------------------------
-# Configuration Parameters
+# Load Configuration
 # --------------------------
-config = {
-    'train_csv': None,
-    'val_csv': None,
-    'test_csv': 'D:/Codes/LineArtPred/data/csv/test4_有先验有跑图方便快速对比.csv',
-    'image_dir': 'D:/Codes/JigsawPrediction/data/test4_images',
-    'batch_size': 32,
-    'checkpoints': [
-        'models/coca_vit_b_32/checkpoints/best_model_epoch_3.pth',
-        'models/coca_vit_b_32/checkpoints1/best_model_epoch_1.pth',
-        'models/coca_vit_b_32/checkpoints2/best_model_epoch_1.pth'
-    ],
-    'use_gpu': torch.cuda.is_available(),
-    'num_classes': 5,
-    'use_features': {
-        'use_full_image': True,
-        'use_numeric_features': True,
-        'use_text_hierarchy': True
-    }
-}
+def load_config(config_path='./config/config_inference.yaml'):
+    with open(config_path, 'r', encoding='utf-8') as file:
+        return yaml.safe_load(file)
+
+config = load_config()
 
 # --------------------------
 # Model Initialization

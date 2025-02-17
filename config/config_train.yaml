@@ -1,0 +1,19 @@
+# 训练数据
+train_csv: "D:/Codes/LineArtPred/data/csv/balanced_data4/train_dataset_balanced.csv"
+val_csv: "D:/Codes/LineArtPred/data/csv/balanced_data4/val_dataset.csv"
+test_csv: "D:/Codes/LineArtPred/data/csv/balanced_data4/test_dataset.csv"
+image_dir: "D:/Codes/JigsawPrediction/data/images"
+
+# 训练参数
+batch_size: 32
+learning_rate: 5e-5
+num_epochs: 100
+patience: 3
+checkpoint_dir: "models/coca_vit_b_32/checkpoints6/"   # 模型保存路径
+use_gpu: true
+num_classes: 4
+
+use_features:
+  use_full_image: true
+  use_numeric_features: true
+  use_text_hierarchy: true

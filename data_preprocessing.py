@@ -47,6 +47,9 @@ class CustomDataset(Dataset):
             axis=1
         )
 
+        # Filter out rows where the label is None (i.e., invalid rows)
+        self.data = self.data.dropna(subset=['calculated_category'])
+
         # Debug: Check for invalid rows
         invalid_rows = self.data[self.data['calculated_category'].isnull()]
         if not invalid_rows.empty:
@@ -81,11 +84,16 @@ class CustomDataset(Dataset):
         if measure_month == "2024年7月":
             # 特殊分类规则
             intervals = [
-                (float('-inf'), 9),  # Class 0
-                (9, 12),  # Class 1
-                (15, 18),  # Class 2
-                (18, float('inf'))  # Class 3
+                (float('-inf'), 0.09),  # Class 0
+                (0.09, 0.12),  # Class 1
+                (0.15, 0.18),  # Class 2
+                (0.18, float('inf'))  # Class 3
             ]
+            # Check if the value falls within any of the defined intervals, else return None
+            for idx, (low, high) in enumerate(intervals):
+                if low <= value < high:
+                    return idx
+            return None  # Return None if the value doesn't match any interval
         else:
             # 默认分类规则
             if is_modified == 0:
@@ -139,7 +147,6 @@ class CustomDataset(Dataset):
             image = Image.fromarray(np_image)
 
         return image
-
 
     def __getitem__(self, idx):
         row = self.data.iloc[idx]
@@ -249,7 +256,7 @@ def load_data(train_csv, val_csv, test_csv, image_dir, preprocess, clip_tokenize
             preprocess=preprocess,
             clip_tokenizer=clip_tokenizer,
             use_features=use_features,
-            augment=True,  # Enable data augmentation
+            augment=False,  # Enable data augmentation
             target_classes=[0, 3]  # Augmentation applies to classes 0 and 4
         )
 
