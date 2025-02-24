@@ -1,14 +1,18 @@
-test_csv: "D:/Codes/LineArtPred/data/csv/test4_有先验有跑图方便快速对比.csv"
-image_dir: "D:/Codes/JigsawPrediction/data/test4_images"
+test_csv: "D:/Codes/LineArtPred/data/csv/test5.csv"
+image_dir: "D:/Codes/JigsawPrediction/data/test5_images"
 
 batch_size: 32
 use_gpu: true
 num_classes: 5
 
+# 选择是否使用增量训练
+incremental_training: true  # 若为 true，则加载 partial_finetune_model
+
 checkpoints:
-  - "models/coca_vit_b_32/checkpoints/best_model_epoch_3.pth"
-  - "models/coca_vit_b_32/checkpoints1/best_model_epoch_1.pth"
-  - "models/coca_vit_b_32/checkpoints2/best_model_epoch_1.pth"
+  - "models/base_model/checkpoints2/best_model_epoch_1_num_classes_5.pth"
+
+incremental_checkpoints:
+  - "models/partial_finetune_model/checkpoints2/best_model_epoch_1_num_classes_5_batch_size_2.pth"
 
 use_features:
   use_full_image: true

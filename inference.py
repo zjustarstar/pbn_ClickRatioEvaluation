@@ -1,14 +1,10 @@
 import os
+
 import numpy as np
 import open_clip
 import torch
 import yaml
 
-from model import ResNetBERTModel
-from inference_data_preprocessing import load_inference_data
-from torchvision import transforms
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-import pandas as pd
 
 # --------------------------
 # Load Configuration
@@ -22,6 +18,17 @@ config = load_config()
 # --------------------------
 # Model Initialization
 # --------------------------
+if config.get('incremental_training', False):
+    from partial_finetune_model import ResNetBERTModel
+    checkpoints = config['incremental_checkpoints']
+else:
+    from base_model import ResNetBERTModel
+    checkpoints = config['checkpoints']
+
+from inference_data_preprocessing import load_inference_data
+from torchvision import transforms
+import pandas as pd
+
 def load_model(checkpoint_path, device, num_numeric_features, num_classes):
     """Initializes and loads a model from a checkpoint."""
     model = ResNetBERTModel(num_numeric_features=num_numeric_features, num_classes=num_classes)
@@ -50,7 +57,7 @@ device = torch.device("cuda" if config['use_gpu'] else "cpu")
 
 # Load all models
 num_numeric_features = 2  # "是否blend" and "色块数"
-models = [load_model(ckpt, device, num_numeric_features, config['num_classes']) for ckpt in config['checkpoints']]
+models = [load_model(ckpt, device, num_numeric_features, config['num_classes']) for ckpt in checkpoints]
 
 # --------------------------
 # Inference Function
@@ -72,8 +79,8 @@ def inference(models, data_loader, device):
             numeric_features = numeric_features.to(device) if numeric_features is not None else None
             text_features = text_features.to(device) if text_features is not None else None
 
-            # Predictions from model 2
-            output = models[2](full_image, numeric_features, text_features)
+            # Predictions from model 0
+            output = models[0](full_image, numeric_features, text_features)
             prob = torch.softmax(output, dim=1)
             pred = torch.argmax(output, dim=1)
 
@@ -92,7 +99,7 @@ final_predictions, final_confidences = inference(models, test_loader, device)
 test_df = pd.read_csv(config['test_csv'])
 test_df['final_predicted_label'] = final_predictions
 test_df['final_confidence'] = final_confidences
-output_csv_path = os.path.join(os.path.dirname(config['checkpoints'][0]), "test_predictions.csv")
+output_csv_path = os.path.join(os.path.dirname(checkpoints[0]), "test_predictions.csv")
 test_df.to_csv(output_csv_path, index=False)
 
 print(f"Predictions saved to {output_csv_path}")

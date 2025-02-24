@@ -1,18 +1,12 @@
 import os
+
 import numpy as np
 import open_clip
 import torch
 import torch.optim as optim
 import yaml
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-from model import ResNetBERTModel
-from data_preprocessing import load_data as load_data
-
-import torch.nn as nn
-import torch.nn.functional as F
-from torchvision.models import resnet50, ResNet50_Weights
-from torchvision import transforms
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
 # --------------------------
@@ -29,12 +23,40 @@ def load_config(config_path='./config/config_train.yaml'):
 
 
 config = load_config()
+# 根据是否增量训练选择加载的模型
+if config['incremental_training']:
+    from partial_finetune_model import ResNetBERTModel
+    train_params = config['incremental_params']
+else:
+    from base_model import ResNetBERTModel
+    train_params = {
+        "batch_size": config["batch_size"],
+        "learning_rate": config["learning_rate"],
+        "patience": config["patience"],
+        "checkpoint_dir": config["checkpoint_dir"]
+    }
+
+from data_preprocessing import load_data as load_data
+
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision.models import resnet50, ResNet50_Weights
+from torchvision import transforms
+
 
 # --------------------------
 # Model Initialization
 # --------------------------
 num_numeric_features = 2  # "是否blend" and "色块数"
 model_wrapper = ResNetBERTModel(num_numeric_features=num_numeric_features, num_classes=config['num_classes'])
+
+# 如果是增量训练，加载预训练模型权重
+if (config['incremental_training'] and os.path.exists
+
+    (config['incremental_model_path'])):
+    model_wrapper.load_state_dict(torch.load(config['incremental_model_path']))
+    print(f"Loaded incremental model weights from {config['incremental_model_path']}")
+
 resnet = resnet50(weights=ResNet50_Weights.DEFAULT)
 
 image_preprocess = transforms.Compose([
@@ -46,7 +68,7 @@ image_preprocess = transforms.Compose([
 # Load data
 data_loaders = load_data(
     config['train_csv'], config['val_csv'], config['test_csv'],
-    config['image_dir'], image_preprocess, open_clip.tokenize, config['batch_size'],
+    config['image_dir'], image_preprocess, open_clip.tokenize, train_params['batch_size'],
     config['use_features']
 )
 
@@ -70,11 +92,21 @@ class FocalLoss(nn.Module):
         return focal_loss.mean()
 
 criterion = FocalLoss(alpha=0.25, gamma=2.0)  # 使用 Focal Loss
-optimizer = optim.Adam(model_wrapper.parameters(), lr=config['learning_rate'], weight_decay=1e-5)
-scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=2, verbose=True)
+if config['incremental_training']:
+    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model_wrapper.parameters()),
+                           lr=float(train_params['learning_rate']), weight_decay=1e-6)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=1, verbose=True)
+else:
+    optimizer = optim.Adam(model_wrapper.parameters(), lr=train_params['learning_rate'], weight_decay=1e-5)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=2, verbose=True)
 
 # Ensure checkpoint directory exists
-os.makedirs(config['checkpoint_dir'], exist_ok=True)
+os.makedirs(train_params['checkpoint_dir'], exist_ok=True)
+
+# 梯度裁剪函数
+def clip_gradients(model, max_norm=1.0):
+    """应用梯度裁剪"""
+    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
 
 # --------------------------
 # Training and Validation Functions
@@ -97,6 +129,11 @@ def train_one_epoch(epoch, model, data_loader, optimizer, criterion, device):
         loss = criterion(outputs, labels)
 
         loss.backward()
+
+        # 增量训练时可以选择加大梯度裁剪
+        if config['incremental_training']:
+            clip_gradients(model_wrapper, max_norm=1.0)
+
         optimizer.step()
         total_loss += loss.item()
 
@@ -156,7 +193,7 @@ def early_stopping_criteria(val_loss, best_val_loss, patience_counter, patience_
 
 def save_best_model(model, epoch, checkpoint_dir, num_classes):
     """Saves the best model during training with num_classes info in filename."""
-    best_model_path = os.path.join(checkpoint_dir, f"best_model_epoch_{epoch + 1}_num_classes_{num_classes}.pth")
+    best_model_path = os.path.join(checkpoint_dir, f"best_model_epoch_{epoch + 1}_num_classes_{num_classes}_batch_size_{train_params['batch_size']}.pth")
     torch.save(model.state_dict(), best_model_path)
     print(f"Best model saved at {best_model_path}")
 
@@ -165,8 +202,8 @@ def save_best_model(model, epoch, checkpoint_dir, num_classes):
 # --------------------------
 best_val_loss = float('inf')
 early_stop_counter = 0
-patience_limit = config['patience']
-last_model_path = os.path.join(config['checkpoint_dir'], "last_model.pth")  # 保存最后一个模型的路径
+patience_limit = train_params['patience']
+last_model_path = os.path.join(train_params['checkpoint_dir'], "last_model.pth")  # 保存最后一个模型的路径
 
 for epoch in range(config['num_epochs']):
     train_loss = train_one_epoch(epoch, model_wrapper, data_loaders['train'], optimizer, criterion, device)
@@ -182,7 +219,7 @@ for epoch in range(config['num_epochs']):
     )
 
     if update_best_model:
-        save_best_model(model_wrapper, epoch, config['checkpoint_dir'], config['num_classes'])
+        save_best_model(model_wrapper, epoch, train_params['checkpoint_dir'], config['num_classes'])
 
     # Save the last model after every epoch
     torch.save(model_wrapper.state_dict(), last_model_path)
