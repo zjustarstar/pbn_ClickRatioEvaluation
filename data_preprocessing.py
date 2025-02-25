@@ -40,6 +40,13 @@ class CustomDataset(Dataset):
             }
         self.use_features = use_features
 
+        if self.use_features['use_numeric_features']:
+            numeric_columns = ['是否blend', '是否修改']
+            self.data[numeric_columns] = self.data[numeric_columns].apply(pd.to_numeric, errors='coerce').fillna(0)
+        else:
+            self.data['是否blend'] = 0
+            self.data['是否修改'] = 1
+
         # Add calculated category column
         print("Calculating categories based on 点击率（双端合计）, 是否修改, and 测图年月...")
         self.data['calculated_category'] = self.data.apply(
@@ -168,8 +175,7 @@ class CustomDataset(Dataset):
 
         # Load numerical features
         numeric_features = []
-        if self.use_features['use_numeric_features']:
-            numeric_features.extend([row['是否blend'], row['是否修改']])
+        numeric_features.extend([row['是否blend'], row['是否修改']])
         numeric_features = torch.tensor(numeric_features, dtype=torch.float32) if numeric_features else None
 
         # Tokenize text features
@@ -181,7 +187,13 @@ class CustomDataset(Dataset):
                 row['一级次要元素Tag'], row['二级次要元素Tag'], row['三级次要元素Tag'],
                 row['图片类型']
             ])
-            text_features = self.clip_tokenizer([text_input]).squeeze(0)
+            try:
+                text_features = self.clip_tokenizer([text_input]).squeeze(0)
+            except Exception as e:
+                print(f"Error tokenizing text: {e}")
+
+        else:
+            text_features = torch.zeros(512)
 
         # Convert label to tensor
         label = torch.tensor(label, dtype=torch.long)

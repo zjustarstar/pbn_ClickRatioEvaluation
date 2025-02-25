@@ -1,11 +1,13 @@
 # 训练数据
-train_csv: "D:/Codes/LineArtPred/data/csv/balanced_data5/train_dataset_balanced.csv"
+train_csv: "D:/Codes/LineArtPred/data/csv/Merged_CSV_Data.csv"
 val_csv: "D:/Codes/LineArtPred/data/csv/balanced_data4/val_dataset.csv"
 test_csv: "D:/Codes/LineArtPred/data/csv/balanced_data4/test_dataset.csv"
 image_dir: "D:/Codes/JigsawPrediction/data/images"
 
 # 训练模式
-incremental_training: true  # 是否增量训练
+incremental_training: false  # 是否增量训练
+
+use_image_only: true
 
 # 训练参数（默认完整训练）
 batch_size: 32
@@ -18,8 +20,8 @@ num_classes: 5
 
 use_features:
   use_full_image: true
-  use_numeric_features: true
-  use_text_hierarchy: true
+  use_numeric_features: false
+  use_text_hierarchy: false
 
 # 训练参数（增量训练）
 incremental_params:
@@ -29,3 +31,5 @@ incremental_params:
   checkpoint_dir: "models/partial_finetune_model/checkpoints2/"  # 增量训练模型保存路径
 
 incremental_model_path: "models/base_model/checkpoints2/best_model_epoch_1_num_classes_5.pth"
+
+image_only_checkpoints: "models/image_only_model/checkpoints1"

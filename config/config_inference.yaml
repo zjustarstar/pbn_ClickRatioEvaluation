@@ -1,12 +1,16 @@
-test_csv: "D:/Codes/LineArtPred/data/csv/test5.csv"
+data_source: "zip"  # 可选值："csv" 或 "zip"
+zip_path: "D:/Codes/LineArtPred/data/zip/test_images.zip"  # 当 data_source 为 "zip" 时使用
+test_csv: "D:/Codes/LineArtPred/data/csv/test5.csv"  # 当 data_source 为 "csv" 时使用
 image_dir: "D:/Codes/JigsawPrediction/data/test5_images"
 
 batch_size: 32
 use_gpu: true
-num_classes: 5
+num_classes: 4
 
 # 选择是否使用增量训练
-incremental_training: true  # 若为 true，则加载 partial_finetune_model
+incremental_training: false  # 若为 true，则加载 partial_finetune_model
+
+use_image_only: true
 
 checkpoints:
   - "models/base_model/checkpoints2/best_model_epoch_1_num_classes_5.pth"
@@ -14,7 +18,10 @@ checkpoints:
 incremental_checkpoints:
   - "models/partial_finetune_model/checkpoints2/best_model_epoch_1_num_classes_5_batch_size_2.pth"
 
+image_only_checkpoints:
+  - "models/image_only_model/checkpoints5/best_model_epoch_2_num_classes_4_batch_size_32.pth"
+
 use_features:
   use_full_image: true
-  use_numeric_features: true
-  use_text_hierarchy: true
+  use_numeric_features: false
+  use_text_hierarchy: false

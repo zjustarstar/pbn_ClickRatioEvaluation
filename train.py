@@ -23,8 +23,24 @@ def load_config(config_path='./config/config_train.yaml'):
 
 
 config = load_config()
-# 根据是否增量训练选择加载的模型
-if config['incremental_training']:
+# --------------------------
+# Determine Model Type & Checkpoints
+# --------------------------
+use_image_only = config.get('use_image_only', False)
+incremental_training = config.get('incremental_training', False)
+
+# 确保 `checkpoints` 选择不被覆盖
+if use_image_only and incremental_training:
+    checkpoints = config['image_only_checkpoints']
+elif use_image_only:
+    checkpoints = config['image_only_checkpoints']
+elif incremental_training:
+    checkpoints = config['incremental_checkpoints']
+else:
+    checkpoints = config['checkpoint_dir']
+
+# 选择正确的模型代码
+if incremental_training:
     from partial_finetune_model import ResNetBERTModel
     train_params = config['incremental_params']
 else:
@@ -33,8 +49,9 @@ else:
         "batch_size": config["batch_size"],
         "learning_rate": config["learning_rate"],
         "patience": config["patience"],
-        "checkpoint_dir": config["checkpoint_dir"]
+        "checkpoint_dir": checkpoints
     }
+
 
 from data_preprocessing import load_data as load_data
 
