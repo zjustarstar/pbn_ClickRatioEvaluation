@@ -31,8 +31,8 @@ class CustomDataset(Dataset):
         if use_features is None:
             use_features = {
                 'use_full_image': True,
-                'use_numeric_features': True,
-                'use_text_hierarchy': True
+                'use_numeric_features': False,
+                'use_text_hierarchy': False
             }
         self.use_features = use_features
 
