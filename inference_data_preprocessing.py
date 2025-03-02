@@ -111,7 +111,7 @@ class CustomDataset(Dataset):
         row = self.data.iloc[idx]
 
         # Load and preprocess the full image
-        image_path = os.path.join(self.image_dir, row['picture_url'])
+        image_path = row['picture_path']
         try:
             image = Image.open(image_path)
             if image.mode != 'RGB':
@@ -169,7 +169,7 @@ def load_inference_data(csv_file, image_dir, preprocess, clip_tokenizer, batch_s
 
 def extract_zip_and_load_data(zip_path, preprocess, clip_tokenizer, batch_size, use_features):
     """
-    解压 ZIP 文件并加载数据到 DataLoader，并新增 picture_id 列（去掉后缀的图片名）。
+    解压 ZIP 文件并加载数据到 DataLoader，并新增 picture_id 和 picture_path 列。
     """
     # 创建临时目录解压文件
     temp_dir = tempfile.mkdtemp()
@@ -185,9 +185,13 @@ def extract_zip_and_load_data(zip_path, preprocess, clip_tokenizer, batch_size, 
     # 生成 `picture_id` 列（去掉后缀的文件名）
     picture_ids = [os.path.splitext(f)[0] for f in image_files]
 
+    # 生成 `picture_path` 列（拼接完整路径）
+    picture_paths = [os.path.join(extracted_image_dir, f) for f in image_files]
+
     # 生成 CSV 以便后续加载
-    extracted_csv_path = os.path.join(temp_dir, "extracted_test.csv")
-    image_df = pd.DataFrame({'picture_url': image_files, 'picture_id': picture_ids})  # 增加 picture_id
+    zip_name = os.path.splitext(os.path.basename(zip_path))[0]  # 获取 ZIP 文件名（不含后缀）
+    extracted_csv_path = os.path.join(temp_dir, f"{zip_name}.csv")  # CSV 命名与 ZIP 一致
+    image_df = pd.DataFrame({'picture_path': picture_paths, 'picture_id': picture_ids})  # 增加 picture_path
     image_df.to_csv(extracted_csv_path, index=False)
 
     # 读取数据

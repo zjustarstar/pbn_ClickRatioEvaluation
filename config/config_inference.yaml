@@ -1,5 +1,5 @@
 data_source: "zip"  # 可选值："csv" 或 "zip"
-zip_path: "D:/Codes/LineArtPred/data/zip/test_images.zip"  # 当 data_source 为 "zip" 时使用
+zip_path: "D:/Codes/pbn_ClickRatioEvaluation/data/test_images.zip"  # 当 data_source 为 "zip" 时使用
 test_csv: "D:/Codes/LineArtPred/data/csv/test5.csv"  # 当 data_source 为 "csv" 时使用
 image_dir: "D:/Codes/JigsawPrediction/data/test5_images"
 
