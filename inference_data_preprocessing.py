@@ -164,7 +164,7 @@ def load_inference_data(csv_file, image_dir, preprocess, clip_tokenizer, batch_s
     )
 
     inference_loader = DataLoader(inference_dataset, batch_size=batch_size, shuffle=False)
-    return inference_loader, None
+    return inference_loader
 
 
 def extract_zip_and_load_data(zip_path, preprocess, clip_tokenizer, batch_size, use_features):

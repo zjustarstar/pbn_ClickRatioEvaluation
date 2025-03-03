@@ -1,11 +1,13 @@
 import os
 import shutil
-from tqdm import tqdm
-from config_loader import load_config_infer
+import time
 
 import numpy as np
 import open_clip
 import torch
+from tqdm import tqdm
+
+from config_loader import load_config_infer
 
 
 def load_model(checkpoint_path, config, device, num_numeric_features, num_classes):
@@ -37,16 +39,12 @@ from torchvision import transforms
 import pandas as pd
 
 def load_data(config):
-    # Image preprocessing
     image_preprocess = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    # --------------------------
-    # Data Loading
-    # --------------------------
     if config['data_source'] == 'zip':
         test_loader, temp_dir = extract_zip_and_load_data(
             zip_path=config['zip_path'],
@@ -56,16 +54,18 @@ def load_data(config):
             use_features=config['use_features']
         )
     else:
-        test_loader, temp_dir = load_inference_data(
+        test_loader = load_inference_data(
             csv_file=config['test_csv'],
             image_dir=config['image_dir'],
             preprocess=image_preprocess,
             clip_tokenizer=open_clip.tokenize,
             batch_size=config['batch_size'],
             use_features=config['use_features']
-        ), None  # CSV 加载方式没有 temp_dir
+        )
+        temp_dir = None
 
     return test_loader, temp_dir
+
 
 
 # --------------------------
@@ -78,6 +78,8 @@ def inference(models, data_loader, device):
 
     with torch.no_grad():
         for batch in tqdm(data_loader, desc="Processing", unit="batch"):
+            # print(f"Batch structure: {type(batch)}, length: {len(batch)}")
+            # print(batch)
             # Unpack batch
             if len(batch) == 3:
                 full_image, numeric_features, text_features = batch
@@ -142,12 +144,11 @@ def main():
     # 读取配置
     try:
         config = load_config_infer()
-        # Set device (GPU or CPU)
         device = torch.device("cuda" if config['use_gpu'] else "cpu")
 
         use_image_only = config.get('use_image_only', False)
         incremental_training = config.get('incremental_training', False)
-        # 确定使用的 checkpoint
+
         if use_image_only:
             checkpoints = config['image_only_checkpoints']
         elif incremental_training:
@@ -156,9 +157,9 @@ def main():
             checkpoints = config['checkpoints']
     except Exception as e:
         print(f"[Error] 配置加载失败: {e}")
-        exit(1)  # 终止程序
+        exit(1)
 
-    # Load all models
+    # Load models and data
     test_loader, temp_dir = load_data(config)
     num_numeric_features = 2  # "是否blend" and "色块数"
     models = [load_model(ckpt, config, device, num_numeric_features, config['num_classes']) for ckpt in checkpoints]
@@ -166,32 +167,37 @@ def main():
     # Perform inference
     final_predictions, final_confidences = inference(models, test_loader, device)
 
-    # **读取对应的 CSV**
+    # 读取测试 CSV
     if config['data_source'] == 'zip':
-        zip_name = os.path.splitext(os.path.basename(config['zip_path']))[0]  # 获取 zip 文件名（不含后缀）
-        test_csv_path = os.path.join(temp_dir, f"{zip_name}.csv")  # 读取 ZIP 生成的 CSV
+        zip_name = os.path.splitext(os.path.basename(config['zip_path']))[0]
+        test_csv_path = os.path.join(temp_dir, f"{zip_name}.csv")
     else:
-        test_csv_path = config['test_csv']  # 读取原始 CSV
+        test_csv_path = config['test_csv']
+        zip_name = os.path.splitext(os.path.basename(test_csv_path))[0]
 
-    test_df = pd.read_csv(test_csv_path)  # **正确加载与推理数据一致的 CSV**
+    test_df = pd.read_csv(test_csv_path)
 
-    # 确保 test_df 和 预测结果 长度匹配
+    # 确保 test_df 长度匹配
     if len(test_df) != len(final_predictions):
         print(f"[Warning] Mismatch: Predictions {len(final_predictions)}, DataFrame {len(test_df)}")
-        test_df = test_df.iloc[:len(final_predictions)]  # **修正 test_df 长度**
+        test_df = test_df.iloc[:len(final_predictions)]
 
-    # 保存预测结果
     test_df['final_predicted_label'] = final_predictions
 
-    output_base_folder = os.path.dirname(test_csv_path) if config['data_source'] == 'csv' else os.path.dirname(
-        config['zip_path'])
-    image_dir = config['image_dir']
-    save_predictions_to_folders(test_df, output_base_folder, os.path.basename(test_csv_path))
-    print(f"Predictions saved into folders under {output_base_folder}")
+    # 确保 `output_base_folder`
+    output_base_folder = os.path.dirname(test_csv_path) if config['data_source'] == 'csv' else os.path.dirname(config['zip_path'])
 
-    # --------------------------
-    # Cleanup Temporary Directory (if used)
-    # --------------------------
+    save_predictions_to_folders(test_df, output_base_folder, os.path.basename(test_csv_path))
+
+    # 生成带时间戳的输出文件名
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    output_csv_path = os.path.join(output_base_folder, f"{zip_name}_prediction_{timestamp}.csv")
+
+    # 保存预测结果
+    test_df.to_csv(output_csv_path, index=False)
+    print(f"Prediction results saved to {output_csv_path}")
+
+    # 清理临时目录
     if temp_dir:
         shutil.rmtree(temp_dir)
         print(f"Temporary directory {temp_dir} deleted.")
